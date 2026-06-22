@@ -6,72 +6,83 @@
 Показывает высокоуровневое взаимодействие системы со своими внешними зависимостями и пользователями.
 
 ```mermaid
-C4Context
-    title System Context diagram for Gitea-Jenkins Bridge
+graph LR
+    classDef person fill:#083F72,color:#fff,stroke:#062b4f,stroke-width:2px,rx:25,ry:25,font-weight:bold,font-size:16px;
+    classDef system fill:#1168BD,color:#fff,stroke:#0b4884,stroke-width:2px,rx:5,ry:5,font-weight:bold,font-size:16px;
 
-    Person(developer, "Developer", "Разработчик, пишущий и пушащий код")
+    dev["🧑‍💻 Developer"]:::person
     
-    System(gitea, "Gitea", "Система контроля версий и хостинг кода (Git)")
-    System(jenkins, "Jenkins CI", "Сервер непрерывной интеграции")
-    
-    System(bridge, "Gitea-Jenkins Bridge", "Наш Rust-middleware. Интегрирует Gitea и Jenkins без плагинов внутри JVM.")
+    subgraph "CI/CD Pipeline"
+        gitea["Gitea Server"]:::system
+        bridge["Gitea-Jenkins Bridge"]:::system
+        jenkins["Jenkins CI"]:::system
+    end
 
-    Rel(developer, gitea, "Пушит код в репозиторий", "Git/SSH/HTTPS")
-    Rel(gitea, bridge, "Отправляет Webhook о новых событиях", "HTTPS")
-    Rel(bridge, jenkins, "Триггерит джобы, передает параметры сборки", "HTTPS/REST")
+    dev -- "git push" --> gitea
+    gitea -- "Webhook POST" --> bridge
+    bridge -- "Trigger build" --> jenkins
     
-    Rel(jenkins, bridge, "Сообщает о начале/окончании сборки", "HTTPS/REST")
-    Rel(bridge, gitea, "Обновляет Commit Status (крестик/галочка)", "HTTPS/REST")
+    jenkins -. "Job Status" .-> bridge
+    bridge -. "Commit Status" .-> gitea
 ```
 
 ## Уровень 2: Container (Контейнеры системы)
 Раскрывает архитектуру самого моста, показывая его основные контейнеры (в нашем случае это логические крейты Rust, запускаемые в одном процессе/контейнере Docker).
 
 ```mermaid
-C4Container
-    title Container diagram for Gitea-Jenkins Bridge
+graph TD
+    classDef external fill:#999999,color:#fff,stroke:#666666,stroke-width:2px,rx:5,ry:5,font-size:14px;
+    classDef container fill:#438DD5,color:#fff,stroke:#2b5a88,stroke-width:2px,rx:5,ry:5,font-weight:bold,font-size:14px;
 
-    System_Ext(gitea, "Gitea", "Git server")
-    System_Ext(jenkins, "Jenkins", "CI server")
+    gitea["Gitea Server"]:::external
+    jenkins["Jenkins CI"]:::external
 
-    System_Boundary(bridge_system, "Gitea-Jenkins Bridge (Rust Process)") {
-        Container(webhook_server, "Webhook Server", "Rust, Axum, Tokio", "Слушает порт. Принимает HTTP запросы, проверяет HMAC X-Gitea-Signature.")
-        Container(bridge_logic, "Bridge Logic (Domain)", "Rust", "Чистая бизнес-логика. Парсит Payload, принимает решения, маппит события в параметры сборки.")
-        Container(jenkins_client, "Jenkins Client", "Rust, Reqwest", "HTTP Клиент. Хранит JSESSIONID cookie, получает CSRF crumbs, запускает BuildWithParameters.")
-        Container(gitea_client, "Gitea Client", "Rust, Reqwest", "HTTP Клиент. Отвечает за вызовы Gitea API (например, отправка Commit Status).")
-    }
+    subgraph "Gitea-Jenkins Bridge (Rust)"
+        direction TB
+        webhook["Webhook Server (Axum)"]:::container
+        logic["Bridge Logic (Domain)"]:::container
+        client_j["Jenkins Client (Reqwest)"]:::container
+        client_g["Gitea Client (Reqwest)"]:::container
+        
+        webhook ==>|"Parsed Event"| logic
+        logic -->|"JenkinsTriggerReq"| client_j
+        logic -->|"GiteaStatusReq"| client_g
+    end
 
-    Rel(gitea, webhook_server, "POST Webhooks (Push, PR)", "JSON/HTTPS")
-    Rel(jenkins, webhook_server, "POST Pipeline Status", "JSON/HTTPS")
+    gitea -->|"POST /webhook"| webhook
+    jenkins -->|"POST /jenkins-status"| webhook
     
-    Rel(webhook_server, bridge_logic, "Передает десериализованные события")
-    Rel(bridge_logic, jenkins_client, "Запрашивает запуск Jenkins Job")
-    Rel(bridge_logic, gitea_client, "Запрашивает обновление статуса в Gitea")
-    
-    Rel(jenkins_client, jenkins, "API Call: /job/{name}/buildWithParameters", "HTTPS")
-    Rel(gitea_client, gitea, "API Call: /api/v1/repos/{owner}/{repo}/statuses/{sha}", "HTTPS")
+    client_j ==>|"buildWithParameters"| jenkins
+    client_g ==>|"POST /statuses/{sha}"| gitea
 ```
 
 ## Уровень 3: Component (Компоненты)
 Демонстрирует внутреннюю структуру главного слоя бизнес-логики (`bridge-logic`).
 
 ```mermaid
-C4Component
-    title Component diagram for bridge-logic crate
+graph TD
+    classDef container fill:#438DD5,color:#fff,stroke:#2b5a88,stroke-width:2px,rx:5,ry:5,font-size:14px;
+    classDef comp fill:#85BBF0,color:#000,stroke:#5b80a4,stroke-width:2px,rx:10,ry:10,font-weight:bold,font-size:14px;
 
-    Container_Boundary(bridge_logic, "Bridge Logic") {
-        Component(processor, "EventProcessor", "struct", "Точка входа. Определяет тип события (PushEvent, PullRequestEvent) и вызывает нужный маппер.")
-        Component(push_mapper, "Push Mapper", "function", "Преобразует PushEvent в параметры (BRANCH_NAME, COMMIT_SHA).")
-        Component(pr_mapper, "PR Mapper", "function", "Преобразует PullRequestEvent в параметры (PR_ID, BASE_BRANCH).")
-        Component(status_mapper, "Status Mapper", "function", "Преобразует внутренний JenkinsStatusRequest в Gitea Commit Status.")
-    }
+    webhook["Webhook Server"]:::container
+    jenkins_client["Jenkins Client"]:::container
 
-    Container(webhook_server, "Webhook Server", "Rust/Axum", "Передает данные из HTTP слоя")
-    Container(jenkins_client, "Jenkins Client", "Rust/Reqwest", "Ожидает команды на запуск")
+    subgraph "Bridge Logic Crate"
+        direction TB
+        processor["EventProcessor Struct"]:::comp
+        push_map["Push Mapper"]:::comp
+        pr_map["PR Mapper"]:::comp
+        status_map["Status Mapper"]:::comp
+    end
 
-    Rel(webhook_server, processor, "Вызывает process_push_event()")
-    Rel(processor, push_mapper, "Делегирует маппинг")
-    Rel(push_mapper, jenkins_client, "Возвращает структуру JenkinsTriggerRequest для клиента")
+    webhook ==>|"Event Payload"| processor
+    
+    processor -->|"PushEvent"| push_map
+    processor -->|"PullRequestEvent"| pr_map
+    processor -->|"PipelineStatus"| status_map
+    
+    push_map -.->|"Map to Jenkins vars"| jenkins_client
+    pr_map -.->|"Map to Jenkins vars"| jenkins_client
 ```
 
 > **Примечание:** Уровень 4 (Code) в C4 обычно не рисуется, так как он слишком детализирован, и его роль выполняют UML диаграммы классов или сам исходный код. В Rust эту роль отлично выполняет `cargo doc`.
