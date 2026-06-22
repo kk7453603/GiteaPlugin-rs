@@ -11,23 +11,25 @@
 * `jenkins-client` — асинхронный HTTP-клиент, взаимодействующий с Jenkins REST API (используя crumb-issuer).
 * `gitea-client` — асинхронный HTTP-клиент, отправляющий статусы сборки (success, failure, pending) в Gitea REST API.
 
-```text
-┌──────────────────────────┐               ┌─────────────────────────────────┐
-│          Gitea           │               │          Jenkins CI             │
-│  (Trigger Webhook POST)  │────(1)───────▶│  (REST API: BuildWithParams)    │
-│                          │               │                                 │
-│  (Commit Status updates) │◀───(4)────────│  (Pipeline Status HTTP Request) │
-└──────────────────────────┘               └─────────────────────────────────┘
-                                   │
-                           ┌───────────────┐
-                           │   bridge-rs   │
-                           │ (Middle-ware) │
-                           └───────────────┘
-                                   │
- (1) Gitea шлет webhook -> bridge-rs.
- (2) bridge-rs маппит JSON -> JenkinsTriggerRequest.
- (3) bridge-rs вызывает API Jenkins.
- (4) Jenkins шлет статус в bridge-rs -> bridge-rs отправляет Commit Status в Gitea.
+```mermaid
+graph LR
+    classDef person fill:#083F72,color:#fff,stroke:#062b4f,stroke-width:2px,rx:25,ry:25,font-weight:bold,font-size:16px;
+    classDef system fill:#1168BD,color:#fff,stroke:#0b4884,stroke-width:2px,rx:5,ry:5,font-weight:bold,font-size:16px;
+
+    dev["🧑‍💻 Developer"]:::person
+    
+    subgraph "CI/CD Pipeline"
+        gitea["Gitea Server"]:::system
+        bridge["Gitea-Jenkins Bridge"]:::system
+        jenkins["Jenkins CI"]:::system
+    end
+
+    dev -- "1. git push" --> gitea
+    gitea -- "2. Webhook POST" --> bridge
+    bridge -- "3. Trigger build" --> jenkins
+    
+    jenkins -. "4. Job Status" .-> bridge
+    bridge -. "5. Commit Status" .-> gitea
 ```
 
 ## 🚀 Быстрый запуск (Docker)
