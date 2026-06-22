@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  gitea:
+    image: gitea/gitea:1.21.0
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    restart: always
+    ports:
+      - "3001:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    user: root
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    restart: always
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+
+  webhook-server:
+    build: .
+    environment:
+      - JENKINS_URL=http://jenkins:8080
+      - JENKINS_USER=admin
+      - JENKINS_TOKEN=admin
+      - JENKINS_JOB=test-job
+      - GITEA_URL=http://gitea:3000
+      - GITEA_TOKEN=token
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gitea
+      - jenkins
+
+volumes:
+  gitea_data:
+  jenkins_home:
