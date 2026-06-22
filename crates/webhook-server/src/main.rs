@@ -50,8 +50,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/jenkins-status", post(handlers::jenkins_webhook::handle))
         .with_state(state);
 
-    let listener = TcpListener::bind("0.0.0.0:3000").await?;
-    info!("Starting server on 0.0.0.0:3000");
+    let server_port = std::env::var("SERVER_PORT").unwrap_or_else(|_| "3000".to_string());
+    let bind_addr = format!("0.0.0.0:{}", server_port);
+    let listener = TcpListener::bind(&bind_addr).await?;
+    info!("Starting server on {}", bind_addr);
     axum::serve(listener, app).await?;
 
     Ok(())

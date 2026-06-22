@@ -4,3 +4,8 @@ Cargo.lock
 .env
 .directory
 gitea-plugin/
+server.log
+server_jenkins.log
+valid_push.json
+payload.json
+bench.go
