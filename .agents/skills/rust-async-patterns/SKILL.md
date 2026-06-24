@@ -122,6 +122,28 @@ async fn race_requests(url1: &str, url2: &str) -> Result<String> {
         result = fetch_data(url2) => result,
     }
 }
+
+// Limit Concurrency with Semaphore inside a loop BEFORE spawning
+use tokio::sync::Semaphore;
+use std::sync::Arc;
+
+async fn fetch_with_semaphore(urls: Vec<String>) -> anyhow::Result<()> {
+    let semaphore = Arc::new(Semaphore::new(10)); // Max 10 concurrent tasks
+    let mut set = JoinSet::new();
+
+    for url in urls {
+        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        set.spawn(async move {
+            let _ = fetch_data(&url).await;
+            drop(permit); // Release back to semaphore
+        });
+    }
+    while let Some(_) = set.join_next().await {}
+    Ok(())
+}
+
+// Rule of thumb: tokio::join! is only for a FIXED (compile-time) number of futures.
+// For dynamic loops, ALWAYS use tokio::spawn or JoinSet.
 ```
 
 ### Pattern 2: Channels for Communication
@@ -352,6 +374,20 @@ async fn process(repo: &dyn Repository, id: &str) -> Result<()> {
     // Process...
     repo.save(&entity).await
 }
+
+// Pattern: clone_box for dyn Trait
+// Standard Clone is not object-safe. Use clone_box to enable cloning trait objects.
+#[async_trait]
+pub trait Check: Send + Sync {
+    async fn execute(&self) -> anyhow::Result<()>;
+    fn clone_box(&self) -> Box<dyn Check>;
+}
+
+impl Clone for Box<dyn Check> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
 ```
 
 ### Pattern 6: Streams and Async Iteration
@@ -499,6 +535,8 @@ tokio::spawn(async move {
 ### Do's
 
 - **Use `tokio::select!`** - For racing futures
+- **Extract Axum State** - Keep state structs cheap to clone by wrapping inner fields in `Arc`
+- **Use Channels for passing messages** - Do not communicate by sharing memory
 - **Prefer channels** - Over shared state when possible
 - **Use `JoinSet`** - For managing multiple tasks
 - **Instrument with tracing** - For debugging async code
@@ -511,6 +549,14 @@ tokio::spawn(async move {
 - **Don't spawn unboundedly** - Use semaphores for limits
 - **Don't ignore errors** - Propagate with `?` or log
 - **Don't forget Send bounds** - For spawned futures
+
+## Agent Directives for LLMs (Qwen3.5 & Co)
+
+When writing async Rust code, AI agents MUST follow these instructions to prevent concurrency and state-management errors:
+
+1. **Async State & Locks Pre-computation**: Map out which variables will cross `.await` boundaries and verify they are `Send`. Never hold a standard library `std::sync::MutexGuard` across an `.await` point.
+2. **Task Lifecycles**: Reason explicitly about task cancellation and graceful shutdown. Don't leave spawned tasks unmanaged; use `JoinSet` or channels to track task completion.
+3. **Avoid Implicit Blocking**: If calling sync operations (e.g., standard I/O, heavy CPU computations), explicitly wrap them in `tokio::task::spawn_blocking`. Make this decision consciously before writing the code.
 
 ## Resources
 

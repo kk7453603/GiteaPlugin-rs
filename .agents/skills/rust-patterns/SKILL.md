@@ -226,6 +226,38 @@ fn get_order_bad(user_id: u64, order_id: u64) -> Result<Order> {
 }
 ```
 
+### Type State Pattern
+
+```rust
+// Encode state machines in types to prevent invalid transitions at compile time
+struct UnverifiedUser { email: String }
+struct VerifiedUser { email: String, user_id: u64 }
+
+impl UnverifiedUser {
+    fn verify(self, id: u64) -> VerifiedUser {
+        VerifiedUser { email: self.email, user_id: id }
+    }
+}
+```
+
+### Extension Traits
+
+```rust
+// Extend external types with custom domain methods
+trait OptionExt<T> {
+    fn ok_or_log(self, msg: &str) -> Option<T>;
+}
+
+impl<T> OptionExt<T> for Option<T> {
+    fn ok_or_log(self, msg: &str) -> Option<T> {
+        if self.is_none() {
+            // Log warning
+        }
+        self
+    }
+}
+```
+
 ## Structs and Data Modeling
 
 ### Builder Pattern for Complex Construction
@@ -388,6 +420,18 @@ unsafe { slice.get_unchecked(index) }
 // Bad: Transmuting between unrelated types
 ```
 
+## Lifetimes and Smart Pointers
+
+### Lifetimes Cheat Sheet
+- **Struct Fields**: Prefer `String` (owned data) over `&'a str`. Avoid references with lifetimes in structs unless absolutely necessary. If code requires complex explicit lifetimes (`'a`, `'b`, `'c`), the architecture is likely flawed.
+- **Temporary Variables and Arguments**: Use `&str` or `&[T]` (cheap and idiomatic).
+- **Function Returns**: Return `String` or owned types if the data is created locally.
+
+### Smart Pointers and Interior Mutability
+- **Heap Allocation**: Use `Box<T>` for recursive types (e.g., trees) or transferring ownership of massive structs to avoid stack copies.
+- **Interior Mutability**: Use `Rc<RefCell<T>>` (single-threaded) or `Arc<Mutex<T>>` (multi-threaded) to mutate data through an immutable reference. Beware of deadlocks and panics!
+- **Breaking Reference Cycles**: Use `Weak<T>` alongside `Rc`/`Arc` to break memory-leaking reference cycles (e.g., parent/child pointers).
+
 ## Module System and Crate Structure
 
 ### Organize by Domain, Not by Type
@@ -495,5 +539,14 @@ async fn bad_async() {
     // Use: tokio::time::sleep(Duration::from_secs(1)).await;
 }
 ```
+
+## Agent Directives for LLMs (Qwen3.5 & Co)
+
+When generating Rust code, AI agents MUST follow these behavioral directives to ensure high quality and prevent common hallucinations:
+
+1. **Borrow Checker & Ownership Pre-computation**: Explicitly reason step-by-step about ownership, lifetimes, and borrows BEFORE writing the code. Do not default to `.clone()` to appease the compiler unless logically required.
+2. **Crate & Method Verification**: DO NOT hallucinate methods on popular crates. If unsure of a crate's API, verify its structure first or write defensive, standard-library-heavy code.
+3. **Safety & `unsafe` Restriction**: Avoid `unsafe` unless explicitly requested. If `unsafe` is used, you MUST explicitly write out a safety proof in text, and the code MUST include `// SAFETY:` comments.
+4. **Compile-Time Driven Logic**: Favor making illegal states unrepresentable. Let the Rust type system do the heavy lifting rather than adding runtime checks.
 
 **Remember**: If it compiles, it's probably correct — but only if you avoid `unwrap()`, minimize `unsafe`, and let the type system work for you.

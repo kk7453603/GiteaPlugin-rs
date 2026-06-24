@@ -183,6 +183,36 @@ fn full_request_lifecycle() {
     assert_eq!(response.status, 200);
     assert_eq!(response.body, "OK");
 }
+
+### Setup and Teardown via RAII
+
+Rust lacks built-in global `before_all` / `after_all`. Encapsulate test context in structs and use `Drop` to guarantee cleanup.
+
+```rust
+struct TestContext {
+    db_name: String,
+}
+
+impl TestContext {
+    fn new() -> Self {
+        let db_name = format!("test_db_{}", uuid::Uuid::new_v4());
+        // Setup database here
+        Self { db_name }
+    }
+}
+
+impl Drop for TestContext {
+    fn drop(&mut self) {
+        // Teardown database here
+        println!("Cleaning up {}", self.db_name);
+    }
+}
+
+#[test]
+fn test_with_context() {
+    let _ctx = TestContext::new(); // Will drop at end of scope
+    // Test logic...
+}
 ```
 
 ## Async Tests
@@ -496,5 +526,13 @@ test:
     - name: Coverage
       run: cargo llvm-cov --fail-under-lines 80
 ```
+
+## Agent Directives for LLMs (Qwen3.5 & Co)
+
+When executing tasks related to testing and TDD, AI agents MUST:
+
+1. **Strict RED-GREEN-REFACTOR via Reasoning**: Explicitly declare your TDD step. If you are in the "RED" phase, ONLY write the test and stop. Wait for test execution results before proceeding to "GREEN".
+2. **Mocking & Isolation**: Before writing tests, identify all external dependencies (Network, DB, FS). Reason about whether to use `mockall` or spin up an integration test container.
+3. **Test Coverage Analysis**: Don't blindly write tests. Reason about edge cases (empty strings, zero, negative numbers, network timeouts) explicitly before implementing property-based tests (`proptest`) or parameterized tests (`rstest`).
 
 **Remember**: Tests are documentation. They show how your code is meant to be used. Write them clearly and keep them up to date.
