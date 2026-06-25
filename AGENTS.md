@@ -42,17 +42,22 @@ gitea-plugin-rs/
 ├── Cargo.toml                  # Virtual workspace definition
 ├── crates/
 │   ├── gitea-client/           # Gitea REST API models and client
-│   │   ├── src/models.rs       # Serde structs for Gitea objects
-│   │   └── src/client.rs       # Reqwest-based API client
+│   │   ├── src/lib.rs          # Crate root & re-exports
+│   │   ├── src/client.rs       # Reqwest-based API client
+│   │   ├── src/events.rs       # Gitea webhook event payloads
+│   │   └── src/models.rs       # Serde structs for Gitea objects
 │   ├── jenkins-client/         # Jenkins REST API client
-│   │   ├── src/client.rs       # Crumb fetching and job triggering
-│   │   └── src/models.rs       # SCM events (Push, Pull Request, etc.)
-│   ├── bridge-logic/           # Core mapping logic
-│   │   └── src/mapper.rs       # Transforms Gitea hooks to Jenkins payloads
+│   │   ├── src/lib.rs          # Crate root & re-exports
+│   │   └── src/client.rs       # Crumb fetching and job triggering
+│   ├── bridge-logic/           # Core event transformation logic
+│   │   ├── src/lib.rs          # Crate root & re-exports
+│   │   └── src/processor.rs    # EventProcessor: transforms Gitea events to Jenkins payloads
 │   └── webhook-server/         # Axum server entrypoint
 │       ├── src/main.rs         # Setup and routing
-│       └── src/handlers.rs     # Webhook endpoints & HMAC check
-├── gitea-plugin/               # Original Java plugin source (reference)
+│       └── src/handlers/       # Webhook endpoints & HMAC check
+│           ├── mod.rs          # Handlers module root
+│           ├── gitea_webhook.rs   # Gitea webhook endpoint
+│           └── jenkins_webhook.rs # Jenkins status callback endpoint
 └── .agents/                    # Agent customizations and rules
 ```
 
@@ -105,7 +110,7 @@ pub async fn gitea_webhook_handler(
     // 1. Validate HMAC signature using x-gitea-signature
     // 2. Parse x-gitea-event header
     // 3. Deserialize body
-    // 4. Pass to bridge-logic mapper
+    // 4. Transform the event via bridge-logic EventProcessor
     // 5. Trigger Jenkins Client
 }
 ```
@@ -127,7 +132,7 @@ pub async fn gitea_webhook_handler(
 
 ## Testing Requirements
 
-- **Unit Testing**: Test the `bridge-logic` mappers thoroughly. Mappers should not perform network requests.
+- **Unit Testing**: Test the `EventProcessor` in `bridge-logic` thoroughly. The `EventProcessor` should not perform network requests.
 - **Integration Testing**: Use mock servers (e.g., `wiremock`) to test `jenkins-client` and `gitea-client`.
 - **Run Tests**: `cargo test --all`
 
@@ -136,10 +141,15 @@ pub async fn gitea_webhook_handler(
 ## Deployment Workflow
 
 - Compile using `cargo build --release`.
-- Configure via `.env` or environment variables:
-  - `GITEA_URL`, `GITEA_TOKEN`, `GITEA_WEBHOOK_SECRET`
-  - `JENKINS_URL`, `JENKINS_USER`, `JENKINS_TOKEN`
+- Configure via `.env` or environment variables (имена и значения по умолчанию из `webhook-server/src/main.rs`):
   - `SERVER_PORT` (default `3000`)
+  - `JENKINS_URL` (default `http://localhost:8080`)
+  - `JENKINS_USER` (default `admin`)
+  - `JENKINS_TOKEN` (default `token`)
+  - `JENKINS_JOB` (default `gitea-trigger-job`)
+  - `GITEA_URL` (default `http://localhost:3000`)
+  - `GITEA_TOKEN` (default `token`)
+  - `WEBHOOK_SECRET` (опциональная, без значения по умолчанию; если не задана — проверка HMAC-подписи отключена)
 
 ---
 
@@ -173,7 +183,7 @@ pub async fn gitea_webhook_handler(
 ### 🦀 Специфично для Rust
 - **`rust-patterns`**: Применение паттернов проектирования, специфичных для Rust.
 - **`rust-async-patterns`**: Строгие правила работы с `tokio`, написания обработчиков `axum` и использования асинхронного клиента `reqwest`.
-- **`rust-testing`**: Следование стандартам написания тестов (unit-тесты для мапперов в `bridge-logic`, mock-объекты для `wiremock`).
+- **`rust-testing`**: Следование стандартам написания тестов (unit-тесты для `EventProcessor` в `bridge-logic`, mock-объекты для `wiremock`).
 
 ### 📐 Архитектура и процессы
 - **`architecture-decision-records`**: Любое значимое изменение в архитектуре моста требует создания ADR.

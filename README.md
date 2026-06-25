@@ -7,9 +7,9 @@
 
 Мост разделен на несколько крейтов для четкого разделения ответственности:
 * `webhook-server` — `axum`-сервер, обрабатывающий HTTP-запросы и валидирующий HMAC-подписи (через `X-Gitea-Signature`).
-* `bridge-logic` — чистая бизнес-логика трансляции `PushEvent` / `PullRequestEvent` от Gitea во внутреннюю модель `JenkinsTriggerRequest`.
+* `bridge-logic` — чистая бизнес-логика: тип `EventProcessor` трансформирует `PushEvent` / `PullRequestEvent` от Gitea во внутреннюю модель `JenkinsTriggerRequest` с параметрами сборки `BuildParams`.
 * `jenkins-client` — асинхронный HTTP-клиент, взаимодействующий с Jenkins REST API (используя crumb-issuer).
-* `gitea-client` — асинхронный HTTP-клиент, отправляющий статусы сборки (success, failure, pending) в Gitea REST API.
+* `gitea-client` — асинхронный HTTP-клиент, отправляющий статусы сборки (success, failure, pending) в Gitea REST API; модели данных и события Gitea описаны в модулях `models.rs` и `events.rs`.
 
 ```mermaid
 graph LR
@@ -50,13 +50,13 @@ docker compose up -d --build
 Мост настраивается **исключительно** через переменные окружения (UI плагина больше не требуется):
 
 * `SERVER_PORT` — порт веб-сервера (по умолчанию `3000`).
-* `GITEA_WEBHOOK_SECRET` — (опционально) секретный токен для проверки HMAC-подписи вебхука Gitea.
-* `JENKINS_URL` — базовый URL Jenkins (например, `http://jenkins:8080`).
-* `JENKINS_USER` — пользователь Jenkins, имеющий права на запуск сборок.
-* `JENKINS_TOKEN` — API-токен Jenkins.
-* `JENKINS_JOB` — название джобы в Jenkins для триггера.
-* `GITEA_URL` — базовый URL Gitea (например, `http://gitea:3000`).
-* `GITEA_TOKEN` — API-токен Gitea с правами на запись статусов коммитов.
+* `WEBHOOK_SECRET` — (опционально, без значения по умолчанию) секретный токен для проверки HMAC-подписи вебхука Gitea.
+* `JENKINS_URL` — базовый URL Jenkins (по умолчанию `http://localhost:8080`).
+* `JENKINS_USER` — пользователь Jenkins, имеющий права на запуск сборок (по умолчанию `admin`).
+* `JENKINS_TOKEN` — API-токен Jenkins (по умолчанию `token`).
+* `JENKINS_JOB` — название джобы в Jenkins для триггера (по умолчанию `gitea-trigger-job`).
+* `GITEA_URL` — базовый URL Gitea (по умолчанию `http://localhost:3000`).
+* `GITEA_TOKEN` — API-токен Gitea с правами на запись статусов коммитов (по умолчанию `token`).
 
 ## 🛠 Интеграция с Jenkins и Gitea (Руководство по эксплуатации)
 
@@ -87,7 +87,7 @@ docker compose up -d --build
 2. Нажмите **Add Webhook** -> выберите **Gitea**.
 3. Установите **Target URL** на `http://<адрес-вашего-bridge>:3000/gitea-webhook/post`.
 4. Установите **HTTP Method** в `POST`.
-5. (Опционально) Укажите **Secret**, который совпадает с `GITEA_WEBHOOK_SECRET` в вашем `.env`.
+5. (Опционально) Укажите **Secret**, который совпадает с `WEBHOOK_SECRET` в вашем `.env`.
 6. В разделе **Trigger On** выберите "Custom Events" и отметьте `Push` и `Pull Request`.
 
 ## 🧑‍💻 Разработка и тестирование
