@@ -2,34 +2,46 @@ use gitea_client::events::{GiteaEvent, PullRequestEvent, PushEvent};
 use serde::Serialize;
 use tracing::info;
 
+/// Параметры сборки Jenkins, сериализуемые в JSON-тело запроса `buildWithParameters`.
 #[derive(Debug, Serialize, PartialEq)]
 pub struct BuildParams {
+    /// Имя ветки сборки; сериализуется в JSON-поле `BRANCH_NAME`.
     #[serde(rename = "BRANCH_NAME")]
     pub branch_name: String,
+    /// SHA коммита, для которого запускается сборка; сериализуется в JSON-поле `COMMIT_SHA`.
     #[serde(rename = "COMMIT_SHA")]
     pub commit_sha: String,
+    /// URL репозитория Gitea; сериализуется в JSON-поле `GITEA_REPO_URL`.
     #[serde(rename = "GITEA_REPO_URL")]
     pub gitea_repo_url: String,
+    /// Тип события (`push` или `pull_request`); сериализуется в JSON-поле `EVENT_TYPE`.
     #[serde(rename = "EVENT_TYPE")]
     pub event_type: String,
+    /// Номер pull request, если событие связано с PR; сериализуется в JSON-поле `PR_ID`.
     #[serde(rename = "PR_ID", skip_serializing_if = "Option::is_none")]
     pub pr_id: Option<String>,
 }
 
+/// Запрос на запуск сборки Jenkins: имя job и набор параметров сборки.
 pub struct JenkinsTriggerRequest {
+    /// Имя job в Jenkins, который требуется запустить.
     pub job_name: String,
+    /// Параметры сборки, передаваемые в Jenkins.
     pub params: BuildParams,
 }
 
+/// Преобразователь событий Gitea в запросы на запуск сборок Jenkins.
 pub struct EventProcessor {
     job_name: String,
 }
 
 impl EventProcessor {
+    /// Создаёт `EventProcessor`, запускающий указанный job Jenkins.
     pub fn new(job_name: String) -> Self {
         Self { job_name }
     }
 
+    /// Преобразует событие Gitea в запрос на сборку Jenkins, если событие его требует.
     #[tracing::instrument(skip(self, event))]
     pub fn process(&self, event: GiteaEvent) -> Option<JenkinsTriggerRequest> {
         match event {

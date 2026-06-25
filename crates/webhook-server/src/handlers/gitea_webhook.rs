@@ -11,13 +11,14 @@ use tracing::{error, info, warn};
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Принимает вебхук Gitea, проверяет HMAC-подпись и запускает сборку Jenkins при поддерживаемом событии.
 #[tracing::instrument(skip(state, body_bytes, headers))]
 pub async fn handle(
     State(state): State<AppState>,
     headers: HeaderMap,
     body_bytes: axum::body::Bytes,
 ) -> impl IntoResponse {
-    // 1. Verify HMAC if secret is configured
+    // Защита от подделки: при заданном секрете запрос без корректной подписи отклоняем
     if let Some(secret) = &state.webhook_secret {
         let signature = headers
             .get("X-Gitea-Signature")
@@ -36,7 +37,7 @@ pub async fn handle(
         }
     }
 
-    // 2. Parse event type
+    // По заголовку определяем тип события, чтобы выбрать схему разбора тела
     let event_type_str = headers
         .get("X-Gitea-Event")
         .and_then(|v| v.to_str().ok())
@@ -51,7 +52,7 @@ pub async fn handle(
             .map(|e| GiteaEvent::PullRequest(Box::new(e))),
         _ => {
             info!("Ignored event type: {}", event_type_str);
-            return StatusCode::OK; // Acknowledge unsupported events
+            return StatusCode::OK; // Неподдерживаемые события подтверждаем, чтобы Gitea не повторяла доставку
         }
     }
     .unwrap_or(GiteaEvent::Unknown(serde_json::Value::Null));

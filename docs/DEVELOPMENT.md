@@ -19,7 +19,7 @@ The project is organized as a Cargo virtual workspace:
 * **`jenkins-client`**: Handles all interactions with the Jenkins REST API.
     * Implements CSRF protection by enabling `cookie_store(true)` in `reqwest`.
 * **`bridge-logic`**: The pure domain layer.
-    * Maps Gitea Webhook payloads (`PushEvent`, `PullRequestEvent`) into Jenkins Job parameters.
+    * The `EventProcessor` type transforms Gitea Webhook payloads (`PushEvent`, `PullRequestEvent`) into Jenkins job parameters (`BuildParams`), producing a `JenkinsTriggerRequest`.
 * **`webhook-server`**: The Axum HTTP server.
     * Entrypoint for Gitea webhooks and Jenkins status callbacks.
 
@@ -51,7 +51,7 @@ pub async fn handle(
 ## Running Tests
 
 ### Unit Tests
-The pure Rust layer (mappers and structs) must pass all unit tests without needing external services:
+The pure Rust layer (`EventProcessor` and data structs) must pass all unit tests without needing external services:
 ```bash
 cargo test -p bridge-logic -p gitea-client -p jenkins-client
 ```

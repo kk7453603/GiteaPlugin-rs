@@ -33,14 +33,14 @@ The application follows the 12-Factor App methodology. All configuration is done
 * `WEBHOOK_SECRET`: (Optional) The secret used by Gitea to sign webhooks. The server validates the `X-Gitea-Signature` HMAC.
 
 ### Jenkins Integration
-* `JENKINS_URL`: Base URL of the Jenkins instance (e.g., `http://jenkins.internal.local:8080`).
-* `JENKINS_USER`: Service account username. Must have `Job/Build` permissions.
-* `JENKINS_TOKEN`: API Token for the user. Do not use passwords.
-* `JENKINS_JOB`: The target parameterized Jenkins job to trigger (e.g., `gitea-ci-pipeline`).
+* `JENKINS_URL`: Base URL of the Jenkins instance (default `http://localhost:8080`; e.g., `http://jenkins.internal.local:8080`).
+* `JENKINS_USER`: Service account username. Must have `Job/Build` permissions (default `admin`).
+* `JENKINS_TOKEN`: API Token for the user. Do not use passwords (default `token`).
+* `JENKINS_JOB`: The target parameterized Jenkins job to trigger (default `gitea-trigger-job`; e.g., `gitea-ci-pipeline`).
 
 ### Gitea Integration
-* `GITEA_URL`: Base URL of the Gitea instance (e.g., `https://git.company.com`).
-* `GITEA_TOKEN`: API Token. Used exclusively to post Commit Statuses back to Gitea. Must have `repo:write` permissions.
+* `GITEA_URL`: Base URL of the Gitea instance (default `http://localhost:3000`; e.g., `https://git.company.com`).
+* `GITEA_TOKEN`: API Token. Used exclusively to post Commit Statuses back to Gitea. Must have `repo:write` permissions (default `token`).
 
 ## Security Considerations
 

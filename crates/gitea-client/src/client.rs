@@ -2,21 +2,34 @@ use crate::models::CommitStatus;
 use reqwest::{Client, Error as ReqwestError};
 use thiserror::Error;
 
+/// Ошибки, возникающие при работе клиента Gitea.
 #[derive(Error, Debug)]
 pub enum GiteaClientError {
+    /// Сбой выполнения HTTP-запроса на уровне транспорта (обёртка над ошибкой `reqwest`).
     #[error("HTTP Request Failed: {0}")]
     RequestError(#[from] ReqwestError),
+    /// Ошибка на уровне API Gitea: HTTP-статус и текст ответа сервера.
     #[error("API Error: {status} - {message}")]
-    ApiError { status: u16, message: String },
+    ApiError {
+        /// HTTP-код статуса ответа, полученного от API Gitea.
+        status: u16,
+        /// Текст тела ответа с описанием ошибки от API Gitea.
+        message: String,
+    },
 }
 
+/// Асинхронный клиент REST API Gitea, инкапсулирующий базовый URL и токен авторизации.
 pub struct GiteaClient {
+    /// Внутренний HTTP-клиент `reqwest`, используемый для отправки запросов.
     client: Client,
+    /// Базовый URL экземпляра Gitea без завершающего слеша.
     base_url: String,
+    /// Токен доступа для аутентификации в API Gitea.
     token: String,
 }
 
 impl GiteaClient {
+    /// Создаёт новый клиент Gitea по базовому URL и токену доступа.
     pub fn new(base_url: String, token: String) -> Self {
         Self {
             client: reqwest::Client::builder().no_proxy().build().unwrap(),
@@ -25,6 +38,7 @@ impl GiteaClient {
         }
     }
 
+    /// Создаёт статус коммита в Gitea для указанного владельца, репозитория и SHA.
     pub async fn create_commit_status(
         &self,
         owner: &str,

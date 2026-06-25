@@ -1,3 +1,8 @@
+//! Точка входа моста: Axum-сервер, принимающий вебхуки Gitea и колбэки статуса Jenkins.
+//!
+//! Настраивает разделяемое состояние ([`AppState`]), регистрирует маршруты
+//! `POST /gitea-webhook/post` и `POST /jenkins-status` и запускает HTTP-сервер.
+
 use axum::{routing::post, Router};
 use bridge_logic::processor::EventProcessor;
 use gitea_client::client::GiteaClient;
@@ -8,11 +13,16 @@ use tracing::info;
 
 mod handlers;
 
+/// Разделяемое состояние Axum-приложения, передаётся во все обработчики вебхуков.
 #[derive(Clone)]
 pub struct AppState {
+    /// Процессор трансформации событий Gitea в запросы на сборку Jenkins.
     pub processor: Arc<EventProcessor>,
+    /// Клиент Gitea API для обратного колбэка статуса коммита.
     pub gitea_client: Arc<GiteaClient>,
+    /// Клиент Jenkins API для запуска сборок.
     pub jenkins_client: Arc<JenkinsClient>,
+    /// Секрет для проверки HMAC-подписи вебхука; `None`, если проверка отключена.
     pub webhook_secret: Option<String>,
 }
 
@@ -20,7 +30,7 @@ pub struct AppState {
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    // In a real app, read from env or config file
+    // Конфигурация читается из переменных окружения, чтобы секреты не попадали в код
     let jenkins_url =
         std::env::var("JENKINS_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let jenkins_user = std::env::var("JENKINS_USER").unwrap_or_else(|_| "admin".to_string());
